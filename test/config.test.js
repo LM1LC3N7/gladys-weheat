@@ -1,33 +1,98 @@
+// -----------------------------------------------------------------------------
+// The configuration, and what /data keeps (file mode, repairs, caps).
+// -----------------------------------------------------------------------------
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeConfig, DEFAULT_CONFIG } from '../src/config.js';
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DEFAULTS, clientKey, normalizeConfig } from '../src/config.js';
+import { HOUR, MINUTE } from '../src/constants.js';
+import { fileStore, normalizeMemory } from '../src/store.js';
 
-test('normalizeConfig returns the defaults when called with no argument', () => {
-  assert.deepEqual(normalizeConfig(), DEFAULT_CONFIG);
+test('the configuration is normalized', () => {
+  const config = normalizeConfig({
+    client_id: ' abc ',
+    client_secret: ' s ',
+    redirect_uri: 'https://example.org/cb?x=1',
+    poll_minutes: '1',
+    language: 'EN',
+  });
+  assert.equal(config.clientId, 'abc');
+  assert.equal(config.clientSecret, 's');
+  assert.equal(config.redirectUri, 'https://example.org/cb?x=1');
+  assert.equal(config.client, clientKey('abc'));
+  assert.equal(config.pollMinutes, 2);
+  assert.equal(config.language, 'en');
+  const empty = normalizeConfig({ redirect_uri: 'javascript:alert(1)', poll_minutes: 'x' });
+  assert.equal(empty.redirectUri, '');
+  assert.equal(empty.client, '');
+  assert.equal(empty.pollMinutes, DEFAULTS.poll_minutes);
+  assert.equal(normalizeConfig({ poll_minutes: 999 }).pollMinutes, 60);
+  assert.equal(normalizeConfig({ redirect_uri: 'https://a b' }).redirectUri, '');
 });
 
-test('normalizeConfig keeps user values over the defaults', () => {
-  const config = normalizeConfig({ latitude: 45.5, longitude: -73.6, unit: 'fahrenheit' });
-  assert.equal(config.latitude, 45.5);
-  assert.equal(config.longitude, -73.6);
-  assert.equal(config.unit, 'fahrenheit');
+test('the memory: repaired, pauses capped, stops tied to a client', () => {
+  const now = 1_000_000_000;
+  const client = clientKey('abc');
+  const memory = normalizeMemory(
+    {
+      session: { client, accessToken: 'a', refreshToken: 'r', expiresAt: now, obtainedAt: 1 },
+      block: { kind: 'expired', client },
+      pause: { kind: 'rate', until: now + 100 * HOUR },
+      lastRenewAt: now + HOUR,
+      pumps: { client, list: [{ id: 'abc-1', name: 'x', dhw: true }, { id: '../x' }] },
+    },
+    now,
+  );
+  assert.equal(memory.session.refreshToken, 'r');
+  assert.equal(memory.block.kind, 'expired');
+  assert.equal(memory.pause.until, now + 6 * HOUR);
+  assert.equal(memory.lastRenewAt, now);
+  assert.deepEqual(memory.pumps.list, [
+    { id: 'abc-1', name: 'x', model: 'Weheat', serial: null, dhw: true },
+  ]);
+  const junk = normalizeMemory(
+    {
+      session: { client: 'nothex', refreshToken: 'r' },
+      block: { kind: 'other', client },
+      pause: { kind: '__proto__', until: now + MINUTE },
+    },
+    now,
+  );
+  assert.equal(junk.session, null);
+  assert.equal(junk.block, null);
+  assert.equal(junk.pause, null);
+  assert.equal(
+    normalizeMemory({ pause: { kind: 'unavailable', until: now - 1 } }, now).pause,
+    null,
+  );
+  assert.deepEqual(normalizeMemory(null, now), {
+    session: null,
+    block: null,
+    pause: null,
+    lastRenewAt: null,
+    pumps: null,
+  });
 });
 
-test('normalizeConfig coerces numeric strings coming from a form', () => {
-  const config = normalizeConfig({ latitude: '48.8', longitude: '2.3', poll_frequency: '600' });
-  assert.equal(config.latitude, 48.8);
-  assert.equal(config.longitude, 2.3);
-  assert.equal(config.poll_frequency, 600);
-  assert.equal(typeof config.poll_frequency, 'number');
-});
-
-test('normalizeConfig falls back to the default for a missing numeric field', () => {
-  const config = normalizeConfig({ unit: 'celsius' });
-  assert.equal(config.poll_frequency, DEFAULT_CONFIG.poll_frequency);
-});
-
-test('GLADYS_PREFER_LOCAL defaults to true and only an explicit false disables it', () => {
-  assert.equal(normalizeConfig().GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: true }).GLADYS_PREFER_LOCAL, true);
-  assert.equal(normalizeConfig({ GLADYS_PREFER_LOCAL: false }).GLADYS_PREFER_LOCAL, false);
+test('the state file is written whole, readable by its owner only', async () => {
+  // Under data/ of the repository (ignored by git), never the system temp directory.
+  const base = fileURLToPath(new URL('../data/', import.meta.url));
+  await mkdir(base, { recursive: true });
+  const dir = await mkdtemp(join(base, 'store-test-'));
+  try {
+    const path = join(dir, 'state.json');
+    const store = fileStore(path);
+    assert.equal(await store.load(), null);
+    await Promise.all([store.save({ a: 1 }), store.save({ a: 2 })]);
+    assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), { a: 2 });
+    assert.deepEqual(await store.load(), { a: 2 });
+    if (process.platform !== 'win32') {
+      assert.equal((await stat(path)).mode & 0o777, 0o600);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

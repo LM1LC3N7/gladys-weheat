@@ -12,44 +12,21 @@ the notes of the version's GitHub Release.
 
 ### Added
 
-- A working example of scene triggers, scene actions and dashboard widgets
-  (Gladys 5.1.0 or later).
-- `CHANGELOG.md`, rolled by the Release workflow.
-- A GitHub Release for every version, with its changelog section as notes: the
-  Gladys Supervision page links each version to the repository's releases.
-- CI runs the tests on Node 22 and 24, and builds the Docker image.
-- Dependabot keeps the npm dependencies and the GitHub Actions up to date.
-- `SECURITY.md` (how to report a vulnerability) and `CLAUDE.md` (project rules
-  for contributors and coding assistants).
-- Manifest tests: `version` matches `package.json`, `docker_image` is tagged
-  with it, descriptions hold 10 to 100 characters, placeholders are
-  multi-language objects.
-- The latitude and longitude fields show an example value as placeholder.
+- Weheat heat pumps (Blackbird, Sparrow, Flint) through the official Weheat
+  API, read only: one device per heat pump with its state, water, outside,
+  room and hot water tank temperatures, COP, electrical and heat output power,
+  energy totals (plain sensors) and water flow.
+- OAuth2 sign-in with PKCE, with the client ID and secret given by Weheat:
+  the Connect button returns to Gladys, or the address the browser ended on
+  is pasted into "Finish the sign-in". The password is typed on the Weheat
+  page only.
+- The tokens are kept in `/data` (mode 0600) and renewed by a timer before
+  their end; a refused renewal or access is a stop kept across restarts,
+  lifted only by a click.
+- Polite polling: 2 minutes per heat pump at least, energy totals every 30
+  minutes, the list every 6 hours; 429 and 5xx pauses kept in `/data`; a
+  failing heat pump, list or energy total never stops the others.
+- Transport badges, English and French texts, documentation, cover image.
+- Never tested with a real account yet.
 
-### Changed
-
-- Node.js 22 or later is required (Node 20 is end-of-life).
-- Integration SDK 0.15.0. The tests now run against the fake Gladys of the
-  SDK, which refuses the payloads Gladys refuses.
-- The refresh interval is one minute minimum, the fastest Gladys polls a
-  device. The plug's power is only sent when it changes, and every 30
-  minutes otherwise.
-
-### Fixed
-
-- Gladys refused the devices of the Discovery tab: the weather station and
-  the plug declared their poll frequency in seconds instead of one of the
-  values Gladys accepts, and were never polled. They now poll every minute,
-  and the readings follow the refresh interval of the configuration.
-
-- The release commit no longer fails `npm run format:check`: the Release
-  workflow updates the manifest `version` and `docker_image` in place instead
-  of re-printing the whole file with `jq`.
-- The integration can write to `/data`: the image creates the directory owned
-  by the `node` user, a new Docker volume was owned by root.
-- A sub-container running the integration's own image follows it to the new
-  tag at each release, as well as in the manifest of the build summary: it kept
-  the previous tag, which may not exist on the registry. Sub-containers on a
-  third-party image (a broker, a database...) keep theirs.
-
-[Unreleased]: https://github.com/GladysAssistant/integration-template-js/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-weheat/commits/main

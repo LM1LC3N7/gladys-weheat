@@ -1,177 +1,195 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Weheat",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Unofficial connector: Weheat heat pumps, temperatures, state, COP, power, energy, flow.",
+    "fr": "Connecteur non officiel : pompes à chaleur Weheat, températures, état, COP, puissance, débit."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-weheat:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-weheat/main/cover.png",
+  "categories": ["climate", "energy"],
+  "transports": ["cloud"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Weheat heat pumps in Gladys",
+        "fr": "Les pompes à chaleur Weheat dans Gladys"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Unofficial connector, not affiliated with Weheat. It reads your Weheat heat pumps (Blackbird, Sparrow, Flint) through the official Weheat API, read only: one device per heat pump with its state, water, outside and room temperatures, COP, electrical and heat output power, energy totals and water flow. It signs in with OAuth like the Weheat integration of Home Assistant: your password is typed on the Weheat page only. Never tested yet with a real account or heat pump. Weheat, Blackbird, Sparrow and Flint are trademarks of their owner.",
+        "fr": "Connecteur non officiel, sans lien avec Weheat. Il lit vos pompes à chaleur Weheat (Blackbird, Sparrow, Flint) par l'API officielle de Weheat, en lecture seule : un appareil par pompe avec son état, les températures de l'eau, extérieure et intérieure, le COP, les puissances électrique et thermique, les totaux d'énergie et le débit d'eau. Il se connecte en OAuth comme l'intégration Weheat de Home Assistant : votre mot de passe se saisit sur la page de Weheat seulement. Jamais testé pour l'instant avec un vrai compte ni une vraie pompe. Weheat, Blackbird, Sparrow et Flint sont des marques de leur propriétaire."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-weheat/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-weheat/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "sign_in_steps",
+      "type": "section",
+      "label": {
+        "en": "Signing in",
+        "fr": "Se connecter"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "1. Enter the client ID and the client secret Weheat gives for its API (see the guide), and save. 2. Click Connect: the Weheat page opens, sign in there. 3. Weheat sends you back to Gladys and the integration reads your heat pumps. If the redirect address Weheat registered for your client is not this Gladys, write it in \"Redirect address\": at the end of the sign-in, copy the whole address the browser shows (it holds code= and state=) and paste it into \"Finish the sign-in\" below, within 15 minutes. The tokens are kept in clear in the /data volume of the integration (readable by its container only), sent only to Weheat; the client secret is kept by Gladys in its database, never shown again, sent only to Weheat.",
+        "fr": "1. Saisissez l'identifiant client et le secret client que Weheat fournit pour son API (voir le guide), et enregistrez. 2. Cliquez sur Connecter : la page de Weheat s'ouvre, connectez-vous. 3. Weheat vous renvoie vers Gladys et l'intégration lit vos pompes à chaleur. Si l'adresse de redirection enregistrée par Weheat pour votre client n'est pas ce Gladys, saisissez-la dans « Adresse de redirection » : à la fin de la connexion, copiez l'adresse complète affichée par le navigateur (elle contient code= et state=) et collez-la dans « Terminer la connexion » plus bas, dans les 15 minutes. Les jetons sont gardés en clair dans le volume /data de l'intégration (lisible par son conteneur seulement), envoyés seulement à Weheat ; le secret client est gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à Weheat."
+      }
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
+      "key": "client_id",
+      "type": "string",
       "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
+      "label": {
+        "en": "Client ID",
+        "fr": "Identifiant client"
+      },
+      "description": {
+        "en": "Given by Weheat for its third-party API.",
+        "fr": "Fourni par Weheat pour son API tierce."
+      }
     },
     {
-      "key": "unit",
+      "key": "client_secret",
+      "type": "secret",
+      "required": false,
+      "label": {
+        "en": "Client secret",
+        "fr": "Secret client"
+      },
+      "description": {
+        "en": "Given by Weheat with the client ID. Kept by Gladys in its database, never shown again, sent only to Weheat.",
+        "fr": "Fourni par Weheat avec l'identifiant client. Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à Weheat."
+      }
+    },
+    {
+      "key": "redirect_uri",
+      "type": "string",
+      "required": false,
+      "label": {
+        "en": "Redirect address (optional)",
+        "fr": "Adresse de redirection (facultative)"
+      },
+      "description": {
+        "en": "Empty: Weheat sends you back to this Gladys. Otherwise the address Weheat registered for your client: finish the sign-in by pasting the address the browser ended on.",
+        "fr": "Vide : Weheat vous renvoie vers ce Gladys. Sinon, l'adresse que Weheat a enregistrée pour votre client : terminez la connexion en collant l'adresse sur laquelle le navigateur s'est arrêté."
+      },
+      "placeholder": {
+        "en": "https://…",
+        "fr": "https://…"
+      }
+    },
+    {
+      "key": "account",
+      "type": "oauth2",
+      "label": {
+        "en": "Weheat account",
+        "fr": "Compte Weheat"
+      },
+      "description": {
+        "en": "Opens the Weheat sign-in page (save the client ID first).",
+        "fr": "Ouvre la page de connexion de Weheat (enregistrez d'abord l'identifiant client)."
+      }
+    },
+    {
+      "key": "poll_minutes",
+      "type": "number",
+      "required": false,
+      "default": 2,
+      "min": 2,
+      "max": 60,
+      "label": {
+        "en": "Refresh interval (minutes)",
+        "fr": "Intervalle de relecture (minutes)"
+      },
+      "description": {
+        "en": "At least 2 minutes per heat pump, as Home Assistant. The energy totals are read every 30 minutes.",
+        "fr": "Au moins 2 minutes par pompe à chaleur, comme Home Assistant. Les totaux d'énergie sont relus toutes les 30 minutes."
+      }
+    },
+    {
+      "key": "language",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
       "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
-      "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+      "default": "fr",
+      "label": {
+        "en": "Language of the names and texts",
+        "fr": "Langue des noms et des textes"
       },
-      "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "options": [
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français"
+          }
+        },
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
+      "key": "finish_sign_in",
+      "timeout_seconds": 30,
+      "label": {
+        "en": "Finish the sign-in",
+        "fr": "Terminer la connexion"
+      },
+      "description": {
+        "en": "Only with a redirect address: paste the address the browser ended on after the Weheat sign-in.",
+        "fr": "Seulement avec une adresse de redirection : collez l'adresse sur laquelle le navigateur s'est arrêté après la connexion Weheat."
+      },
+      "fields": [
+        {
+          "key": "url",
+          "type": "string",
+          "required": true,
+          "label": {
+            "en": "Address with code= and state=",
+            "fr": "Adresse avec code= et state="
+          },
+          "placeholder": {
+            "en": "https://…?state=…&code=…",
+            "fr": "https://…?state=…&code=…"
+          }
+        }
+      ]
     },
     {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
-    }
-  ],
-  "scene_triggers": [
-    {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
-      "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+      "key": "test_connection",
+      "timeout_seconds": 90,
+      "label": {
+        "en": "Test Weheat",
+        "fr": "Tester Weheat"
       },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
-        },
-        {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
-        }
-      ],
-      "variables": [
-        {
-          "key": "target",
-          "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
-        }
-      ]
-    }
-  ],
-  "scene_actions": [
-    {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
       "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
-      },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+        "en": "Reads the heat pumps of the account now and shows the result.",
+        "fr": "Lit maintenant les pompes à chaleur du compte et affiche le résultat."
+      }
     }
   ]
 }
