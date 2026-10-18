@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-18
+
 ### Added
 
 - Weheat heat pumps (Blackbird, Sparrow, Flint) through the official Weheat
@@ -50,4 +52,5 @@ the notes of the version's GitHub Release.
 - A network error on Weheat's return to Gladys asks for a new click on
   Connect ("paste again" is kept for the pasted address).
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-weheat/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-weheat/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-weheat/releases/tag/v0.1.1
