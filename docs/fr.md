@@ -68,15 +68,20 @@ destine, avec ses conditions d'utilisation.
 ### Avec une autre adresse de redirection
 
 1. Saisissez l'adresse enregistrée par Weheat dans **Adresse de redirection**
-   et enregistrez.
+   (https, ou http sur localhost seulement) et enregistrez.
 2. Cliquez sur **Connecter** et connectez-vous sur la page de Weheat.
 3. À la fin, le navigateur s'arrête sur cette adresse (la page peut afficher
    une erreur, c'est normal). Copiez **l'adresse complète** de la barre
    d'adresse : elle contient `code=` et `state=`.
 4. Collez-la dans l'action **Terminer la connexion**, dans les 15 minutes.
+   Elle doit contenir `state=` et commencer par l'adresse de redirection :
+   une autre adresse est refusée (la connexion reste alors utilisable).
 
 Une connexion démarrée ne sert qu'une fois ; après un redémarrage de
-l'intégration, cliquez de nouveau sur Connecter.
+l'intégration, cliquez de nouveau sur Connecter. Si Weheat tarde à répondre
+(plus de 3,5 secondes au retour vers Gladys, 10 secondes pour « Terminer la
+connexion »), l'intégration affiche « Weheat lent, cliquez de nouveau sur
+Connecter » : recommencez la connexion.
 
 ## Ce que l'intégration garde
 
@@ -97,6 +102,9 @@ l'intégration, cliquez de nouveau sur Connecter.
   toutes les 6 heures (et sur demande depuis Découverte).
 - Le jeton est renouvelé par un minuteur un peu avant sa fin, jamais deux
   fois dans la même minute.
+- Après un redémarrage, la première lecture attend la fin de l'intervalle
+  depuis la dernière lecture et la fin d'une pause en cours (gardées dans
+  /data).
 
 ## Erreurs et arrêts
 
@@ -104,8 +112,8 @@ l'intégration, cliquez de nouveau sur Connecter.
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Weheat demande de ralentir (HTTP 429)                | pause de 1 minute à 6 heures (selon Weheat), gardée après un redémarrage, pour toutes les requêtes |
 | Weheat indisponible (erreur 5xx)                     | pause de 5 minutes à 1 heure, gardée après un redémarrage                                          |
-| Réseau coupé, réponse inattendue                     | nouvel essai après l'intervalle, puis 5, 15, 30 minutes                                            |
-| Une pompe, les totaux d'énergie ou la liste échouent | le reste continue ; nouvel essai au tour suivant (30 minutes pour l'énergie)                       |
+| Réseau coupé, réponse inattendue                     | nouvel essai après l'intervalle, puis 5, 15, 30 minutes, gardé après un redémarrage                |
+| Une pompe, les totaux d'énergie ou la liste échouent | le reste continue ; nouvel essai au tour suivant (30 minutes pour l'énergie et la liste)           |
 | Renouvellement refusé par Weheat                     | arrêt « session terminée », gardé : cliquez sur Connecter                                          |
 | Accès refusé même avec un nouveau jeton              | arrêt gardé : vérifiez le compte, puis Connecter ou « Tester Weheat »                              |
 

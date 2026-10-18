@@ -157,6 +157,14 @@ export const T = {
         `Weheat could not be reached (${reason}): paste the same address again in a moment.`,
         `Weheat n’a pas pu être joint (${reason}) : collez de nouveau la même adresse dans un instant.`,
       ),
+    wrongAddress: both(
+      'This address is not the redirect address of the sign-in: paste the address the browser ended on after the Weheat page (the sign-in stays usable).',
+      'Cette adresse n’est pas l’adresse de redirection de la connexion : collez l’adresse sur laquelle le navigateur s’est arrêté après la page Weheat (la connexion reste utilisable).',
+    ),
+    slow: both(
+      'Weheat is slow to answer: click Connect again.',
+      'Weheat lent, cliquez de nouveau sur Connecter.',
+    ),
     done: both(
       'Signed in to Weheat: reading the heat pumps…',
       'Connecté à Weheat : lecture des pompes à chaleur…',

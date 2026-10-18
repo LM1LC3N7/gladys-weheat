@@ -21,7 +21,9 @@ test('the pasted address: whole, query only, fragment, error, junk', () => {
     state: 's1',
     error: null,
     errorDescription: null,
+    base: 'https://x.example/cb',
   });
+  assert.equal(parseRedirect('?code=c3&state=s3').base, null);
   assert.equal(parseRedirect('  https://x.example/cb?code=c2&state=s2  trailing').code, 'c2');
   assert.equal(parseRedirect('?code=c3&state=s3').state, 's3');
   assert.equal(parseRedirect('code=c4').code, 'c4');
@@ -103,8 +105,12 @@ test('a sign-in serves once and for 15 minutes', () => {
   const signIns = new SignIns({ now: () => now });
   const url = new URL(signIns.begin({ clientId: 'c', redirectUri: 'https://g/cb' }));
   const state = url.searchParams.get('state');
+  assert.equal(signIns.take(null), null, 'no state, no sign-in (never the newest one)');
+  assert.equal(signIns.take(''), null);
+  assert.equal(signIns.peek(state).redirectUri, 'https://g/cb');
   assert.ok(signIns.take(state));
   assert.equal(signIns.take(state), null);
+  assert.equal(signIns.peek(state), null);
   const second = new URL(signIns.begin({ clientId: 'c', redirectUri: 'https://g/cb' }));
   now = 16 * 60_000;
   assert.equal(signIns.take(second.searchParams.get('state')), null);

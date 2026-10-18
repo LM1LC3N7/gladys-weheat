@@ -48,6 +48,12 @@ export const TIMINGS = {
   requestTimeout: 15 * SECOND,
   /** A button waits less (actions time out after 60 s). */
   quickTimeout: 10 * SECOND,
+  /** The code exchange of Gladys' OAuth return: Gladys waits for its answer. */
+  callbackTimeout: 3500,
+  /** A pause after an ordinary error, kept in /data, read back capped at this. */
+  backoffMax: 30 * MINUTE,
+  /** The list failing while heat pumps are known: tried again 30 minutes later. */
+  listRetry: 30 * MINUTE,
   /** Renewed this long before its end (at most half of its lifetime). */
   tokenMargin: 5 * MINUTE,
   /** Never two renewals within a minute (a token shorter than the margin, a clock ahead). */

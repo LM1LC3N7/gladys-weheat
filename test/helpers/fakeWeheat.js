@@ -99,8 +99,8 @@ export function fakeWeheat({ pumps = [PUMP_A], expiresIn = 300 } = {}) {
     get apiRequests() {
       return this.requests.filter((r) => r.route !== 'token');
     },
-    transport: async (url, { method = 'GET', headers = {}, body } = {}) => {
-      const request = { url, method, headers, body, route: undefined, form: undefined };
+    transport: async (url, { method = 'GET', headers = {}, body, timeout } = {}) => {
+      const request = { url, method, headers, body, timeout, route: undefined, form: undefined };
       server.requests.push(request);
       if (url === TOKEN_URL) {
         request.route = 'token';

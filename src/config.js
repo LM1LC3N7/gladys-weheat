@@ -32,19 +32,23 @@ function address(raw) {
   }
   try {
     const url = new URL(text);
-    return ['https:', 'http:'].includes(url.protocol) ? url.toString() : '';
+    // HTTPS only, except a local address (the code never crosses a network in clear).
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    return url.protocol === 'https:' || (url.protocol === 'http:' && local) ? url.toString() : '';
   } catch {
     return '';
   }
 }
 
 export function normalizeConfig(raw = {}) {
-  const clientId = String(raw?.client_id ?? '').trim();
+  const typed = String(raw?.client_id ?? '').trim();
+  // The client key is computed from the id kept, never from a refused one.
+  const clientId = typed.length <= 256 ? typed : '';
   const language = String(raw?.language ?? DEFAULTS.language)
     .trim()
     .toLowerCase();
   return {
-    clientId: clientId.length <= 256 ? clientId : '',
+    clientId,
     clientSecret: String(raw?.client_secret ?? '').trim(),
     redirectUri: address(raw?.redirect_uri),
     client: clientId ? clientKey(clientId) : '',

@@ -62,15 +62,20 @@ under its terms of use.
 
 ### With another redirect address
 
-1. Enter the address Weheat registered in **Redirect address** and save.
+1. Enter the address Weheat registered in **Redirect address** (https, or
+   http on localhost only) and save.
 2. Click **Connect** and sign in on the Weheat page.
 3. At the end, the browser stops on that address (the page may show an error,
    that is expected). Copy **the whole address** from the address bar: it
    holds `code=` and `state=`.
-4. Paste it into the **Finish the sign-in** action, within 15 minutes.
+4. Paste it into the **Finish the sign-in** action, within 15 minutes. It
+   must hold `state=` and start with the redirect address: another address is
+   refused (the sign-in then stays usable).
 
 A sign-in serves once; after a restart of the integration, click Connect
-again.
+again. If Weheat is slow to answer (over 3.5 seconds on the return to Gladys,
+10 seconds for "Finish the sign-in"), the integration says "Weheat is slow to
+answer: click Connect again": start the sign-in again.
 
 ## What the integration keeps
 
@@ -91,6 +96,8 @@ again.
   6 hours (and on request from Discovery).
 - The token is renewed by a timer shortly before its end, never twice within
   a minute.
+- After a restart, the first read waits for the end of the interval since the
+  last read and for the end of a running pause (both kept in /data).
 
 ## Errors and stops
 
@@ -98,8 +105,8 @@ again.
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Weheat asks to slow down (HTTP 429)                  | pause of 1 minute to 6 hours (as Weheat says), kept across a restart, for every request |
 | Weheat unavailable (5xx error)                       | pause of 5 minutes to 1 hour, kept across a restart                                     |
-| Network down, unexpected answer                      | new try after the interval, then 5, 15, 30 minutes                                      |
-| One heat pump, the energy totals or the list failing | the rest goes on; new try at the next round (30 minutes for the energy)                 |
+| Network down, unexpected answer                      | new try after the interval, then 5, 15, 30 minutes, kept across a restart               |
+| One heat pump, the energy totals or the list failing | the rest goes on; new try at the next round (30 minutes for the energy and the list)    |
 | Renewal refused by Weheat                            | "session ended" stop, kept: click Connect                                               |
 | Access refused even with a new token                 | stop kept: check the account, then Connect or "Test Weheat"                             |
 

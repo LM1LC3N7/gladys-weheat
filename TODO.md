@@ -23,6 +23,13 @@ up to date at the end of every milestone.
       24). The store validator cannot run from the development sandbox: it
       runs at publication. No Docker on this PC: the image was not built here
       (the CI builds it).
+- [x] **Milestone 1 fixes — review** (2026-10-18): pasted address needs its
+      `state` and the redirect address of its sign-in; Gladys' OAuth return
+      exchanged within 3.5 s; renewal during a pause neither sent nor
+      re-pausing; error pause and last cycle kept in `/data`; failing list
+      retried after 30 min; redirect address https only (http on localhost);
+      client key from the kept client id; "énergie" in the French
+      description.
 - [ ] **Milestone 2 — real account**: run against a real account (see "To
       check on a real account"), turn the answers (anonymized) into
       fixtures, fix what differs.
@@ -80,7 +87,15 @@ up to date at the end of every milestone.
   authorization request, and the user pastes the address the browser ended
   on into the `finish_sign_in` action (indego's model). A pending sign-in
   (state, verifier, redirect) lives in memory only, 15 minutes, one use, 5
-  at most; a restart needs a new click.
+  at most; a restart needs a new click. Revised after review: the pasted
+  address must carry its `state` (never "the newest sign-in"), and a whole
+  address must have the origin and path of that sign-in's redirect address,
+  otherwise it is refused and the sign-in stays usable. The redirect address
+  is https only (http accepted on localhost, 127.0.0.1, [::1]).
+- **Exchange deadline** (review): Gladys waits for the answer of
+  `onOAuthCallback`, so its code exchange has 3.5 s; the pasted address
+  (an action, 30 s) has 10 s. A timeout answers "Weheat is slow: click
+  Connect again" and never reuses that code (Weheat may have used it).
 - **Tokens in /data** (the brief): `/data/weheat-state.json`, mode 0600,
   written whole (temporary file, fsync, rename), with the client key (sha256
   of the client id, 16 hex digits); a new client id ignores the old session.
@@ -90,7 +105,9 @@ up to date at the end of every milestone.
   60 min). A read with an ended token renews first under the same floor.
   `invalid_grant` (400/401 of the token endpoint) = `expired` stop: session
   dropped, stop kept in `/data`, only a new sign-in lifts it. A 403 of the
-  token host is transient, not a refusal.
+  token host is transient, not a refusal. A renewal due during a 429/5xx
+  pause is not sent and does not touch the pause (review): the timer comes
+  back at its end.
 - **401 of the API**: one renewal and one retry in the same cycle; a 401
   with a token obtained in this cycle is the `unauthorized` stop (kept in
   `/data`), lifted by a new sign-in or the test button (one read per click).
@@ -99,9 +116,13 @@ up to date at the end of every milestone.
   every heat pump (or on the list with none known, or on the token endpoint)
   5, 15, 30, 60 min and never under the interval. Both kept in `/data`,
   capped when read back, kept across a reconnection to Gladys. Other errors:
-  the interval, then 5, 15, 30 min, never sooner than the interval.
+  the interval, then 5, 15, 30 min, never sooner than the interval; that
+  pause is kept in `/data` too, read back capped at 30 min (review). The
+  start of the last cycle is kept as well: after a restart the first read
+  waits for max(last cycle + interval, end of a pause).
 - **Secondary endpoints never block**: the list (when heat pumps are known,
-  from this run or `/data`), the energy totals (tried again 30 min later
+  from this run or `/data`; a failing list, 5xx included, is tried again 30
+  min later, not at every cycle), the energy totals (tried again 30 min later
   whatever happens) and one heat pump (status says which) fail alone; only a
   429 or a session problem stops the cycle.
 - **Pace**: Home Assistant's 120 s per heat pump (configurable 2–60 min,

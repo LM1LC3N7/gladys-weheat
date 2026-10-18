@@ -28,9 +28,10 @@ export function pkcePair() {
 }
 
 /**
- * The parameters of a pasted address: `{ code, state, error, errorDescription }`,
- * or null when nothing usable is in it. Takes the whole address, or only its
- * query string ("?code=…&state=…" or "code=…&state=…").
+ * The parameters of a pasted address: `{ code, state, error, errorDescription,
+ * base }`, or null when nothing usable is in it. Takes the whole address
+ * (`base`: its origin and path, checked against the redirect address), or
+ * only its query string ("?code=…&state=…" or "code=…&state=…", `base` null).
  */
 export function parseRedirect(input) {
   const text = String(input ?? '')
@@ -40,6 +41,7 @@ export function parseRedirect(input) {
     return null;
   }
   let query;
+  let base = null;
   if (/^https?:\/\//i.test(text)) {
     let url;
     try {
@@ -49,6 +51,7 @@ export function parseRedirect(input) {
     }
     // Keycloak answers in the query (response_mode=query); a fragment is read too.
     query = `${url.search.slice(1)}&${url.hash.slice(1)}`;
+    base = baseOf(url);
   } else if (/^[?#]?(?:code|state|error|session_state|iss)=/.test(text)) {
     query = text.replace(/^[?#]/, '').split(/\s/)[0];
   } else {
@@ -61,8 +64,19 @@ export function parseRedirect(input) {
     state: params.get('state') || null,
     error: params.get('error') || null,
     errorDescription: params.get('error_description') || null,
+    base,
   };
   return result.code || result.error ? result : null;
+}
+
+/** The origin and path of an address (no query, no fragment), or null. */
+export function baseOf(address) {
+  try {
+    const url = address instanceof URL ? address : new URL(address);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return null;
+  }
 }
 
 const str = (value) =>
@@ -174,15 +188,20 @@ export class SignIns {
     return url.toString();
   }
 
-  /** The sign-in of `state` (the newest one when the address has none); it serves once. */
+  /** The sign-in of `state` still valid, without using it (null when none). */
+  peek(state) {
+    const entry = typeof state === 'string' && state ? this.pending.get(state) : undefined;
+    return entry && this.now() - entry.at <= TIMINGS.signInTtl ? entry : null;
+  }
+
+  /** The sign-in of `state` (a state is required); it serves once. */
   take(state) {
-    const key = state || [...this.pending.keys()].at(-1);
-    const entry = key ? this.pending.get(key) : undefined;
+    const entry = typeof state === 'string' && state ? this.pending.get(state) : undefined;
     if (!entry) {
       return null;
     }
-    this.pending.delete(key);
-    return this.now() - entry.at <= TIMINGS.signInTtl ? { key, entry } : null;
+    this.pending.delete(state);
+    return this.now() - entry.at <= TIMINGS.signInTtl ? { key: state, entry } : null;
   }
 
   /** Put a sign-in back (Weheat was not reached: the same code may be tried again). */

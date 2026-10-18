@@ -29,4 +29,21 @@ the notes of the version's GitHub Release.
 - Transport badges, English and French texts, documentation, cover image.
 - Never tested with a real account yet.
 
+### Security
+
+- "Finish the sign-in" needs the `state` of the address, and a whole address
+  must be the redirect address of its sign-in (otherwise refused, the sign-in
+  stays usable). The redirect address must be https (http on localhost only).
+
+### Fixed
+
+- The return of Weheat to Gladys is exchanged within 3.5 s (10 s for the
+  pasted address); a slow Weheat asks for a new click on Connect.
+- A token renewal due during a pause waits for its end without extending it.
+- After a restart, the first read waits for the interval since the last read
+  and for an error pause, both kept in `/data`.
+- A failing list of heat pumps is tried again after 30 minutes, not at every
+  read.
+- The French description of the store mentions the energy.
+
 [Unreleased]: https://github.com/LM1LC3N7/gladys-weheat/commits/main

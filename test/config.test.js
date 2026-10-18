@@ -31,6 +31,20 @@ test('the configuration is normalized', () => {
   assert.equal(empty.pollMinutes, DEFAULTS.poll_minutes);
   assert.equal(normalizeConfig({ poll_minutes: 999 }).pollMinutes, 60);
   assert.equal(normalizeConfig({ redirect_uri: 'https://a b' }).redirectUri, '');
+  // HTTPS only, except a local address.
+  assert.equal(normalizeConfig({ redirect_uri: 'http://gladys.lan/cb' }).redirectUri, '');
+  assert.equal(
+    normalizeConfig({ redirect_uri: 'http://localhost:8080/cb' }).redirectUri,
+    'http://localhost:8080/cb',
+  );
+  assert.equal(
+    normalizeConfig({ redirect_uri: 'http://127.0.0.1/cb' }).redirectUri,
+    'http://127.0.0.1/cb',
+  );
+  // An id too long is refused, and so is its client key.
+  const long = normalizeConfig({ client_id: 'x'.repeat(300) });
+  assert.equal(long.clientId, '');
+  assert.equal(long.client, '');
 });
 
 test('the memory: repaired, pauses capped, stops tied to a client', () => {
@@ -73,8 +87,15 @@ test('the memory: repaired, pauses capped, stops tied to a client', () => {
     block: null,
     pause: null,
     lastRenewAt: null,
+    lastCycleAt: null,
     pumps: null,
   });
+  const backoff = normalizeMemory(
+    { pause: { kind: 'backoff', until: now + 5 * HOUR }, lastCycleAt: now + HOUR },
+    now,
+  );
+  assert.equal(backoff.pause.until, now + 30 * MINUTE, 'an error pause read back capped');
+  assert.equal(backoff.lastCycleAt, now, 'a cycle in the future counts as now');
 });
 
 test('the state file is written whole, readable by its owner only', async () => {

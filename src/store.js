@@ -5,7 +5,8 @@
 //     client they belong to (a hash of the client id);
 //   - a stop that only the user can lift (renewal refused, access refused
 //     with a fresh token), with its client, so a restart never retries it;
-//   - the end of a 429 or 5xx pause, capped when read again;
+//   - the end of a 429, 5xx or error pause, capped when read again, and when
+//     the last read cycle started (a restart never reads sooner);
 //   - when the token was last renewed (never two renewals within a minute);
 //   - the heat pumps last listed, so a failing list never stops the reads.
 // The tokens are kept as Weheat gives them, in clear, in a file readable by
@@ -56,7 +57,11 @@ const client = (value) =>
   typeof value === 'string' && /^[0-9a-f]{16}$/.test(value) ? value : undefined;
 
 const BLOCKS = new Set(['expired', 'unauthorized']);
-const PAUSES = { rate: TIMINGS.rateLimitMax, unavailable: TIMINGS.unavailable.at(-1) };
+const PAUSES = {
+  rate: TIMINGS.rateLimitMax,
+  unavailable: TIMINGS.unavailable.at(-1),
+  backoff: TIMINGS.backoffMax,
+};
 
 function session(raw) {
   const s = raw?.session;
@@ -104,6 +109,7 @@ export function normalizeMemory(raw, now = Date.now()) {
   const pause = raw?.pause;
   const until = time(pause?.until);
   const lastRenewAt = time(raw?.lastRenewAt);
+  const lastCycleAt = time(raw?.lastCycleAt);
   return {
     session: session(raw),
     block:
@@ -116,6 +122,8 @@ export function normalizeMemory(raw, now = Date.now()) {
         : null,
     // A time ahead of the clock counts as now (never a renewal blocked for long).
     lastRenewAt: lastRenewAt === undefined ? null : Math.min(lastRenewAt, now),
+    // The start of the last read cycle: the first read after a restart waits the interval.
+    lastCycleAt: lastCycleAt === undefined ? null : Math.min(lastCycleAt, now),
     pumps: pumps(raw),
   };
 }

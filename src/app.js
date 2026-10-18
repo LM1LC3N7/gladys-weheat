@@ -21,7 +21,7 @@ import { buildDevice, deviceIds, deviceStates } from './devices.js';
 import { WeheatError, errorReason, httpsTransport, networkError } from './http.js';
 import { T, age, join } from './i18n.js';
 import { parseEnergy, parseLog, parsePumps } from './model.js';
-import { SignIns, parseRedirect, tokenRequest } from './oauth.js';
+import { SignIns, baseOf, parseRedirect, tokenRequest } from './oauth.js';
 import { StatePublisher } from './publisher.js';
 import { fileStore, normalizeMemory } from './store.js';
 
@@ -162,6 +162,13 @@ export class WeheatApp {
     }
     await this.setStatus(false, this.pauseMessage() ?? T.connecting);
     this.scheduleRenew();
+    // The first read: not sooner than the interval after the last cycle (kept in
+    // /data, never in the future) nor before the end of a pause (capped when read).
+    const due = Math.max((this.memory.lastCycleAt ?? -Infinity) + this.interval, this.pausedUntil);
+    if (due > this.now()) {
+      this.scheduleAt(due);
+      return;
+    }
     await this.tick();
   }
 
@@ -372,8 +379,8 @@ export class WeheatApp {
     if (err.kind === 'rate_limited' || err.kind === 'unavailable') {
       await this.pause(err);
       await this.setStatus(this.connectedOnce && err.kind === 'rate_limited', this.pauseMessage());
-    } else if (err.kind === 'renew_wait') {
-      // A renewal ran less than a minute ago: the timer comes back after it.
+    } else if (err.kind === 'renew_wait' || err.kind === 'paused') {
+      // A renewal ran less than a minute ago, or a pause runs: the timer comes back after it.
     } else if (this.session && this.now() >= this.session.expiresAt) {
       await this.setStatus(
         false,
@@ -403,9 +410,8 @@ export class WeheatApp {
       throw new WeheatError('renew_wait', 'renewed less than a minute ago');
     }
     if (this.hardPaused) {
-      throw new WeheatError(this.pauseKind === 'rate' ? 'rate_limited' : 'unavailable', 'paused', {
-        retryAfter: this.pausedUntil - now,
-      });
+      // Nothing sent: the pause already running is neither extended nor restarted.
+      throw new WeheatError('paused', 'paused');
     }
     const epoch = this.epoch;
     this.memory.lastRenewAt = now;
@@ -531,7 +537,13 @@ export class WeheatApp {
       return;
     }
     const now = this.now();
-    const delay = Math.max(this.interval, this.pausedUntil - now, this.renewRetryAt - now);
+    this.scheduleAt(now + Math.max(this.interval, this.pausedUntil - now, this.renewRetryAt - now));
+  }
+
+  /** The next read at `at`. */
+  scheduleAt(at) {
+    this.clearTimer();
+    const delay = at - this.now();
     const generation = this.generation;
     this.timer = this.timers.setTimeout(
       () => {
@@ -565,6 +577,8 @@ export class WeheatApp {
     }
     const timeout = quick ? TIMINGS.quickTimeout : TIMINGS.requestTimeout;
     this.cycleStart = this.now();
+    // Kept in /data: a restart never reads sooner than the interval after this cycle.
+    this.memory.lastCycleAt = this.cycleStart;
     try {
       await this.readAll(timeout);
       if (generation !== this.generation) {
@@ -580,6 +594,7 @@ export class WeheatApp {
     if (generation !== this.generation) {
       return;
     }
+    await this.saveMemory();
     await this.publishDevices();
     this.queueStates();
     await this.flush();
@@ -605,6 +620,8 @@ export class WeheatApp {
         if (this.pumps.length === 0 || this.critical(err)) {
           throw err;
         }
+        // Tried again in 30 minutes, not at every cycle.
+        this.listAt = this.now() - TIMINGS.listInterval + TIMINGS.listRetry;
         this.logger.warn(`Weheat: the list of heat pumps failed (${errorReason(err)})`);
       }
     }
@@ -650,9 +667,14 @@ export class WeheatApp {
 
   /** Errors that stop the whole cycle: a 429 (the whole account), the session. */
   critical(err) {
-    return ['rate_limited', 'unauthorized_block', 'refused', 'signed_out', 'renew_wait'].includes(
-      err?.kind,
-    );
+    return [
+      'rate_limited',
+      'unauthorized_block',
+      'refused',
+      'signed_out',
+      'renew_wait',
+      'paused',
+    ].includes(err?.kind);
   }
 
   /** The heat pumps listed: kept in /data (a failing list later never stops the reads). */
@@ -707,6 +729,9 @@ export class WeheatApp {
       case 'unauthorized_block':
         await this.block('unauthorized');
         return;
+      case 'paused':
+        // A 429 / 5xx pause already runs: kept as it is.
+        return;
       default:
         break;
     }
@@ -730,6 +755,13 @@ export class WeheatApp {
       this.offline = OFFLINE.has(err.kind) || this.offline;
       this.pausedUntil = Math.max(this.pausedUntil, this.now() + wait);
       message = T.unreachable(reason, age(wait));
+    }
+    if (this.pauseKind === 'backoff') {
+      // Kept in /data (capped): a restart does not read sooner either.
+      this.memory.pause = {
+        kind: 'backoff',
+        until: Math.min(this.pausedUntil, this.now() + TIMINGS.backoffMax),
+      };
     }
     this.failures += 1;
     const connected = err.kind === 'rate_limited' && this.connectedOnce;
@@ -898,7 +930,8 @@ export class WeheatApp {
     if (!signIn) {
       throw thrown(T.signIn.unknown);
     }
-    const result = await this.exchange(code, signIn);
+    // Gladys waits for this answer: the exchange must end well before its timeout.
+    const result = await this.exchange(code, signIn, { timeout: TIMINGS.callbackTimeout });
     if (result !== T.signIn.done) {
       throw thrown(result);
     }
@@ -918,15 +951,27 @@ export class WeheatApp {
       }`.slice(0, 160);
       return T.signIn.cancelled(detail);
     }
+    // The state ties the address to a sign-in started here: never guessed.
+    if (!parsed.state) {
+      return T.signIn.noCode;
+    }
+    const pending = this.signIns.peek(parsed.state);
+    if (!pending) {
+      return T.signIn.unknown;
+    }
+    // A whole address must be the redirect address of that sign-in (left unused otherwise).
+    if (parsed.base !== null && parsed.base !== baseOf(pending.redirectUri)) {
+      return T.signIn.wrongAddress;
+    }
     const signIn = this.signIns.take(parsed.state);
     if (!signIn) {
       return T.signIn.unknown;
     }
-    return this.exchange(parsed.code, signIn);
+    return this.exchange(parsed.code, signIn, { timeout: TIMINGS.quickTimeout });
   }
 
   /** The code -> a new session, kept in /data; then one read. */
-  async exchange(code, signIn) {
+  async exchange(code, signIn, { timeout = TIMINGS.quickTimeout } = {}) {
     if (!this.config.clientId) {
       return T.noClient;
     }
@@ -948,11 +993,15 @@ export class WeheatApp {
           clientId: this.config.clientId,
           clientSecret: this.config.clientSecret,
           now: this.now(),
-          timeout: TIMINGS.quickTimeout,
+          timeout,
         },
       );
     } catch (err) {
       this.logger.warn(`Weheat sign-in failed: ${errorReason(err)}`);
+      if (err.kind === 'timeout') {
+        // The code may have been used by Weheat meanwhile: a new sign-in is the safe way.
+        return T.signIn.slow;
+      }
       if (err.kind === 'refused') {
         return T.signIn.refused(err.detail ?? 'HTTP 400');
       }
@@ -980,6 +1029,7 @@ export class WeheatApp {
     if (this.pauseKind === 'backoff') {
       this.pausedUntil = 0;
       this.pauseKind = undefined;
+      this.memory.pause = null;
     }
     await this.saveMemory();
     this.logger.info('Weheat: signed in');
@@ -1022,6 +1072,7 @@ export class WeheatApp {
     if (this.pauseKind === 'backoff') {
       this.pausedUntil = 0;
       this.pauseKind = undefined;
+      this.memory.pause = null;
     }
     await this.tick({ quick: true });
     return this.lastMessage ?? T.signedOut;

@@ -12,6 +12,7 @@ import { WeheatApp } from '../src/app.js';
 import { clientKey } from '../src/config.js';
 import { ACTIONS, OAUTH_FIELD } from '../src/constants.js';
 import { registerHandlers } from '../src/handlers.js';
+import { WeheatError } from '../src/http.js';
 import {
   CLIENT_ID,
   CLIENT_SECRET,
@@ -239,13 +240,49 @@ test('another redirect address: the pasted address finishes the sign-in', async 
     url: `${redirect}?error=access_denied&state=${back.state}`,
   });
   assert.match(ack.data.message.en, /did not sign you in \(access_denied\)/);
+  // Without its state, an address is never matched to a sign-in (no guess).
+  ack = await gladys.fake.action(ACTIONS.FINISH_SIGN_IN, {
+    url: `${redirect}?code=${back.code}`,
+  });
+  assert.match(ack.data.message.en, /No sign-in code/);
+  // Another address than the redirect of the sign-in: refused, the sign-in stays usable.
+  for (const other of [
+    `https://evil.example/weheat/return?state=${back.state}&code=${back.code}`,
+    `https://my.example.org/other?state=${back.state}&code=${back.code}`,
+  ]) {
+    ack = await gladys.fake.action(ACTIONS.FINISH_SIGN_IN, { url: other });
+    assert.match(ack.data.message.en, /not the redirect address/);
+  }
+  assert.equal(server.requests.length, 0, 'nothing exchanged');
   ack = await gladys.fake.action(ACTIONS.FINISH_SIGN_IN, {
     url: `${redirect}?state=${back.state}&session_state=x&code=${back.code}`,
   });
   assert.match(ack.data.message.en, /Signed in to Weheat/);
   await settle();
-  assert.equal(server.of('token')[0].form.redirect_uri, redirect);
+  const [exchange] = server.of('token');
+  assert.equal(exchange.form.redirect_uri, redirect);
+  assert.equal(exchange.timeout, 10 * SECOND);
   assert.equal(gladys.fake.connectionStatus.connected, true);
+});
+
+test('the return relayed by Gladys: exchanged within 3.5 s, a slow Weheat asks for a new click', async (t) => {
+  const { gladys, server, connect } = await setup(t, { signIn: false });
+  const back = await connect();
+  server.queue('token', async (request) => {
+    assert.equal(request.timeout, 3500);
+    throw new WeheatError('timeout', 'no answer within 4 s');
+  });
+  let ack = await gladys.fake.oauthCallback(OAUTH_FIELD, back);
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /Weheat lent, cliquez de nouveau sur Connecter/);
+  // The code may have been used: the same return is not exchanged again.
+  ack = await gladys.fake.oauthCallback(OAUTH_FIELD, back);
+  assert.equal(ack.success, false);
+  assert.equal(server.of('token').length, 1);
+  const again = await connect();
+  ack = await gladys.fake.oauthCallback(OAUTH_FIELD, again);
+  assert.equal(ack.success, true);
+  assert.equal(server.of('token')[1].timeout, 3500);
 });
 
 test('the token is renewed by a timer before its end, never twice within a minute', async (t) => {
@@ -388,10 +425,62 @@ test('the list failing: the heat pumps kept in /data are still read', async (t) 
   first.app.stop();
   server.queue('list', answer(500, {}));
   server.logs.set(PUMP_A, logDto(PUMP_A, { tWaterOut: 40 }));
-  const { gladys } = await setup(t, { server, store, mock: false });
+  const before = server.requests.length;
+  const { gladys, advance } = await setup(t, { server, store, mock: false });
+  // A restart right after a cycle waits the interval before its first read.
+  assert.equal(server.requests.length, before);
+  await advance(2 * MINUTE);
   assert.equal(server.of('list').length, 2);
   assert.equal(last(gladys, PUMP_A, 'water_out'), 40);
   assert.equal(gladys.fake.connectionStatus.connected, true);
+  // The failing list is tried again 30 minutes later, not at every cycle.
+  await advance(28 * MINUTE, MINUTE);
+  assert.equal(server.of('list').length, 2);
+  await advance(3 * MINUTE, MINUTE);
+  assert.equal(server.of('list').length, 3);
+});
+
+test('an error pause and the last cycle are kept in /data: a restart never reads sooner', async (t) => {
+  const store = memoryStore();
+  const server = fakeWeheat({ expiresIn: 3600 });
+  const first = await setup(t, { server, store, config: { ...CONFIG, poll_minutes: 10 } });
+  server.queue('log', async () => {
+    throw Object.assign(new Error('boom'), { code: 'ECONNRESET' });
+  });
+  await first.advance(10 * MINUTE);
+  assert.equal(store.data.pause.kind, 'backoff');
+  assert.equal(store.data.pause.until, Date.now() + 10 * MINUTE);
+  assert.equal(store.data.lastCycleAt, Date.now());
+  first.app.stop();
+  const before = server.requests.length;
+  const again = await setup(t, {
+    server,
+    store,
+    mock: false,
+    config: { ...CONFIG, poll_minutes: 10 },
+  });
+  await again.advance(9 * MINUTE, MINUTE);
+  assert.equal(server.requests.length, before);
+  await again.advance(2 * MINUTE, MINUTE);
+  assert.ok(server.requests.length > before);
+  assert.equal(store.data.pause, null);
+});
+
+test('a renewal due during a pause is not sent and never extends the pause', async (t) => {
+  const store = memoryStore();
+  const server = fakeWeheat({ expiresIn: 300 });
+  const { advance } = await setup(t, { server, store });
+  server.queue('log', answer(429, {}, { 'retry-after': '600' }));
+  await advance(2 * MINUTE);
+  const until = store.data.pause.until;
+  assert.equal(until, Date.now() + 10 * MINUTE);
+  assert.equal(server.of('token').length, 1);
+  // The renewal (due at 150 s) waits for the end of the pause.
+  await advance(9 * MINUTE, 10 * SECOND);
+  assert.equal(server.of('token').length, 1);
+  assert.equal(store.data.pause.until, until);
+  await advance(2 * MINUTE, 10 * SECOND);
+  assert.equal(server.of('token').length, 2);
 });
 
 test('a 401: one renewal and one retry; refused again, a stop only a click lifts', async (t) => {
