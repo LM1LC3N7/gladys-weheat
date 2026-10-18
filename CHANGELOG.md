@@ -45,5 +45,9 @@ the notes of the version's GitHub Release.
 - A failing list of heat pumps is tried again after 30 minutes, not at every
   read.
 - The French description of the store mentions the energy.
+- While a restart waits for the interval or for an error pause, the status
+  says when the next read comes instead of "Reading Weheat…".
+- A network error on Weheat's return to Gladys asks for a new click on
+  Connect ("paste again" is kept for the pasted address).
 
 [Unreleased]: https://github.com/LM1LC3N7/gladys-weheat/commits/main

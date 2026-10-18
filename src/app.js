@@ -160,15 +160,17 @@ export class WeheatApp {
       await this.setStatus(false, T.signedOut);
       return;
     }
-    await this.setStatus(false, this.pauseMessage() ?? T.connecting);
     this.scheduleRenew();
     // The first read: not sooner than the interval after the last cycle (kept in
     // /data, never in the future) nor before the end of a pause (capped when read).
     const due = Math.max((this.memory.lastCycleAt ?? -Infinity) + this.interval, this.pausedUntil);
     if (due > this.now()) {
+      // The status says when the read comes, never "reading" while it waits.
+      await this.setStatus(false, this.pauseMessage() ?? T.nextRead(age(due - this.now())));
       this.scheduleAt(due);
       return;
     }
+    await this.setStatus(false, this.pauseMessage() ?? T.connecting);
     await this.tick();
   }
 
@@ -967,11 +969,11 @@ export class WeheatApp {
     if (!signIn) {
       return T.signIn.unknown;
     }
-    return this.exchange(parsed.code, signIn, { timeout: TIMINGS.quickTimeout });
+    return this.exchange(parsed.code, signIn, { timeout: TIMINGS.quickTimeout, pasted: true });
   }
 
   /** The code -> a new session, kept in /data; then one read. */
-  async exchange(code, signIn, { timeout = TIMINGS.quickTimeout } = {}) {
+  async exchange(code, signIn, { timeout = TIMINGS.quickTimeout, pasted = false } = {}) {
     if (!this.config.clientId) {
       return T.noClient;
     }
@@ -1009,6 +1011,10 @@ export class WeheatApp {
         await this.pause(err);
         this.signIns.restore(signIn);
         return this.pauseMessage();
+      }
+      if (!pasted) {
+        // Gladys' return cannot be replayed: only a new click on Connect helps.
+        return T.signIn.retryConnect(errorReason(err));
       }
       // Weheat was not reached: the same address can be pasted again.
       this.signIns.restore(signIn);

@@ -279,10 +279,20 @@ test('the return relayed by Gladys: exchanged within 3.5 s, a slow Weheat asks f
   ack = await gladys.fake.oauthCallback(OAUTH_FIELD, back);
   assert.equal(ack.success, false);
   assert.equal(server.of('token').length, 1);
+  // A quick network error on the return to Gladys: a new click, never "paste again".
+  const third = await connect();
+  server.queue('token', async () => {
+    throw Object.assign(new Error('reset'), { code: 'ECONNRESET' });
+  });
+  ack = await gladys.fake.oauthCallback(OAUTH_FIELD, third);
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /click Connect again/);
+  assert.match(ack.error, /cliquez de nouveau sur Connecter/);
+  assert.doesNotMatch(ack.error, /paste|collez/i);
   const again = await connect();
   ack = await gladys.fake.oauthCallback(OAUTH_FIELD, again);
   assert.equal(ack.success, true);
-  assert.equal(server.of('token')[1].timeout, 3500);
+  assert.equal(server.of('token')[2].timeout, 3500);
 });
 
 test('the token is renewed by a timer before its end, never twice within a minute', async (t) => {
@@ -429,6 +439,7 @@ test('the list failing: the heat pumps kept in /data are still read', async (t) 
   const { gladys, advance } = await setup(t, { server, store, mock: false });
   // A restart right after a cycle waits the interval before its first read.
   assert.equal(server.requests.length, before);
+  assert.match(message(gladys).en, /next read in 2 min/);
   await advance(2 * MINUTE);
   assert.equal(server.of('list').length, 2);
   assert.equal(last(gladys, PUMP_A, 'water_out'), 40);
@@ -459,6 +470,8 @@ test('an error pause and the last cycle are kept in /data: a restart never reads
     mock: false,
     config: { ...CONFIG, poll_minutes: 10 },
   });
+  assert.match(message(again.gladys).en, /^Weheat: next read in 10 min\.$/);
+  assert.match(message(again.gladys).fr, /prochaine lecture dans 10 min/);
   await again.advance(9 * MINUTE, MINUTE);
   assert.equal(server.requests.length, before);
   await again.advance(2 * MINUTE, MINUTE);

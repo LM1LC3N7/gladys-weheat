@@ -88,6 +88,8 @@ export const T = {
     'Weheat a refusé l’accès de ce compte même avec un nouveau jeton : vérifiez le compte, puis cliquez sur Connecter (ou « Tester Weheat »). Rien n’est réessayé de lui-même.',
   ),
   connecting: both('Reading Weheat…', 'Lecture de Weheat…'),
+  nextRead: (wait) =>
+    both(`Weheat: next read in ${wait.en}.`, `Weheat : prochaine lecture dans ${wait.fr}.`),
   connected: (count) =>
     both(
       `Connected to Weheat: ${count} heat pump(s). Open Discovery to add them.`,
@@ -161,6 +163,11 @@ export const T = {
       'This address is not the redirect address of the sign-in: paste the address the browser ended on after the Weheat page (the sign-in stays usable).',
       'Cette adresse n’est pas l’adresse de redirection de la connexion : collez l’adresse sur laquelle le navigateur s’est arrêté après la page Weheat (la connexion reste utilisable).',
     ),
+    retryConnect: (reason) =>
+      both(
+        `Weheat could not be reached (${reason}): click Connect again.`,
+        `Weheat n’a pas pu être joint (${reason}) : cliquez de nouveau sur Connecter.`,
+      ),
     slow: both(
       'Weheat is slow to answer: click Connect again.',
       'Weheat lent, cliquez de nouveau sur Connecter.',
