@@ -1,6 +1,6 @@
 {
   "name": "gladys-weheat",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Weheat heat pumps (Blackbird, Sparrow, Flint) for Gladys Assistant through the official Weheat API: temperatures, state, COP, power, energy totals and flow, read only.",
   "type": "module",
